@@ -57,7 +57,7 @@ flowchart LR
 | エフェクト | 手法 | パラメータ |
 |-----------|------|-----------|
 | PitchShifter | 位相ボコーダ（OLA）| `semitones`: -12〜+12 |
-| FormantShifter | FFT スペクトル補間（OLA）+ A特性補正 | `ratio`: 0.5〜2.0 |
+| FormantShifter | WORLD CheapTrick 包絡推定 + OLA | `ratio`: 0.5〜2.0 |
 | RobotEffect | リングモジュレーション | `carrier_freq` (Hz) |
 | EchoEffect | 循環ディレイバッファ | `delay_ms`, `decay` |
 
@@ -93,31 +93,43 @@ OLA 正規化係数 = sum(hann_window²) / HOP ≈ 3.0
 
 ブロックをまたいで `_prev_phase`・`_synth_phase` を保持することで位相の連続性を維持する。
 
-### FormantShifter: FFT スペクトル補間
+### FormantShifter: WORLD CheapTrick + OLA
+
+従来の生 FFT スペクトル補間では高調波が bin 境界をまたいでエネルギーが分散し、
+音量低下と機械的な音質になる問題があった。WORLD の CheapTrick を使って
+「声道包絡（フォルマント情報）」だけを正確に抽出・操作することで解決した。
+
+**処理フロー:**
 
 1. 入力バッファに Hann 窓を掛けて FFT → `X[k]`
-2. スペクトル補間: `warped[k] = X[k / ratio]`（`np.interp` で実部・虚部を別々に補間）
-3. A特性重みによる知覚音量補正（下記参照）
-4. IFFT → Hann 窓 → OLA で出力バッファに加算
-
-`ratio > 1.0` で低域スペクトルを高域にマッピング → フォルマント周波数上昇 → 女声方向。
-
-### A特性による知覚音量補正
-
-スペクトル補間はハーモニクスを bin 境界にまたがって分散させ、エネルギー損失が生じる。
-単純な RMS 正規化では人間の聴覚感度の周波数特性（等ラウドネス曲線）を考慮できず、
-ratio が大きいほど音が小さく聞こえる問題があった。
-
-A特性フィルタ（ISO 226）で各 bin を重み付けした知覚エネルギーを入出力で揃えることで解決した。
+2. WORLD CheapTrick でスムーズな声道包絡（パワースペクトル）を推定 → `sp[k]`
+3. 包絡を周波数軸方向にワープ → `sp_shifted[k] = sp[k / ratio]`
+4. FFT スペクトルに包絡比を乗算: `X_shifted[k] = X[k] * sqrt(sp_shifted[k] / sp[k])`
+5. IFFT → Hann 窓 → OLA で出力バッファに加算
 
 ```python
-# A(f) = 12194² * f⁴ / ((f²+20.6²) * sqrt((f²+107.7²)(f²+737.9²)) * (f²+12194²))
-# 1kHz 基準で正規化（1kHz = 1.0）
-a_weights = _calc_a_weights(n_bins, sample_rate, FRAME)  # __init__ で事前計算
+# 包絡比を乗算することで高調波の位置を保ちながら声道特性（フォルマント）だけを変換
+warped = X * sqrt(sp_shifted / sp_orig)
+```
 
-l_in  = dot(|X|      * a_weights, |X|      * a_weights)
-l_out = dot(|warped| * a_weights, |warped| * a_weights)
-warped *= sqrt(l_in / l_out)
+**旧手法との違い:**
+
+| | 旧（FFT スペクトル補間） | 新（WORLD CheapTrick） |
+|---|---|---|
+| 操作対象 | FFT スペクトル全体（高調波ごと移動） | 声道包絡のみ（高調波位置は不変） |
+| エネルギー損失 | 高調波が bin 境界をまたいで分散 | 包絡比なので発生しない |
+| 音質 | 機械的・音量低下 | 自然な声質を維持 |
+
+**計算コスト最適化:**
+
+WORLD 分析（`dio` + `stonemask` + `cheaptrick`）は毎ホップ実行すると重いため、
+4 ホップ（≈23ms）に 1 回だけ更新してキャッシュを使い回す。
+声道特性はこの程度の時間スケールでは十分安定しているため音質への影響は無視できる。
+
+```
+_ENV_UPDATE_HOPS = 4   # 4 hop ごとに更新
+_WORLD_FRAME_PERIOD_MS = 10.0  # WORLD 分析フレーム間隔
+speed = 12             # dio の高速モード（精度を少し下げて高速化）
 ```
 
 ---
