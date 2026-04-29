@@ -9,7 +9,8 @@
 | Lint / Format | ruff | uv との親和性 |
 | 音声 I/O | sounddevice (PortAudio) | 低レイテンシ・クロスプラットフォーム |
 | 数値演算 | numpy | 音声バッファ操作・FFT の基盤 |
-| CLI UI | rich | ターミナル UI の視認性向上 |
+| GUI | PySide6 (Qt for Python) | 純 Python・LGPL ライセンス・Mac/Win 対応 |
+| CLI UI | rich | ターミナル UI（`--cli` フラグ時に使用） |
 | 設定ファイル | YAML (PyYAML) | 人間・AI ともに読みやすい |
 | 仮想オーディオ | BlackHole 2ch | MIT ライセンス・Mac 標準的な選択 |
 
@@ -145,7 +146,7 @@ warped *= sqrt(l_in / l_out)
 voice_changer/
 ├── src/
 │   └── voice_changer/
-│       ├── main.py              # エントリポイント・起動フロー
+│       ├── main.py              # エントリポイント（デフォルト: GUI / --cli: CLI）
 │       ├── audio/
 │       │   ├── capture.py       # マイク入力・BlackHole 出力・モニタリング
 │       │   └── pipeline.py      # エフェクト直列実行
@@ -155,10 +156,16 @@ voice_changer/
 │       │   ├── formant.py       # FFT スペクトル補間 + A特性補正
 │       │   ├── robot.py         # リングモジュレーション
 │       │   └── echo.py          # 循環ディレイバッファ
+│       ├── gui/
+│       │   ├── app.py           # QApplication エントリポイント・スタイルシート
+│       │   ├── main_window.py   # QMainWindow（デバイス選択・プリセット・エフェクト制御）
+│       │   └── widgets/
+│       │       ├── toggle_switch.py  # アニメーション付きトグルスイッチ
+│       │       └── effect_row.py     # エフェクト行（トグル + スライダー）
 │       ├── setup/
 │       │   └── blackhole.py     # BlackHole 検出・インストール支援
 │       └── cli/
-│           └── app.py           # rich による CLI UI・コマンドループ
+│           └── app.py           # rich による CLI UI（--cli フラグ時に使用）
 ├── config/
 │   └── default.yaml             # デフォルト設定（sample_rate, block_size）・プリセット定義
 ├── docs/

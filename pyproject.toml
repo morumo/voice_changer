@@ -12,10 +12,13 @@ dependencies = [
   "rich>=13.7",
   "pyyaml>=6.0",
   "setuptools==69.5.1",
+  "PySide6>=6.7",
+  "pyqtgraph>=0.13",
 ]
 
 [project.scripts]
 voice-changer = "voice_changer.main:main"
+voice-changer-cli = "voice_changer.main:main_cli"
 
 [build-system]
 requires = ["hatchling"]

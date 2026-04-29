@@ -21,7 +21,7 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def _run() -> None:
+def _run_cli() -> None:
     config = load_config()
     audio_cfg = config["audio"]
 
@@ -68,14 +68,23 @@ def _run() -> None:
         run_command_loop(effects, capture, stop_event)
 
 
-def main() -> None:
+def main_cli() -> None:
     try:
-        _run()
+        _run_cli()
     except KeyboardInterrupt:
         pass
     finally:
         console.print("\n[bold]終了しました。[/bold]")
-        sys.exit(0)
+    sys.exit(0)
+
+
+def main() -> None:
+    if "--cli" in sys.argv:
+        sys.argv.remove("--cli")
+        main_cli()
+    else:
+        from voice_changer.gui.app import run_gui
+        run_gui()
 
 
 if __name__ == "__main__":
