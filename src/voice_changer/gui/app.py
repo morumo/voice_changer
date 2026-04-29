@@ -114,6 +114,35 @@ QLabel[class="effect-name"] {
 QLabel[class="param-label"] { color: #9090A0; font-size: 12px; }
 QLabel[class="param-value"] { color: #4FC3F7; font-size: 12px; }
 QFrame#separator { color: #3D3E5C; max-height: 1px; }
+QLineEdit {
+    background-color: #252636;
+    border: 1px solid #3D3E5C;
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 28px;
+    color: #E8E8F0;
+}
+QLineEdit:focus { border-color: #4FC3F7; }
+QPushButton#preset-action-btn {
+    background-color: #252636;
+    border: 1px solid #3D3E5C;
+    border-radius: 4px;
+    color: #9090A0;
+    padding: 4px 12px;
+    min-height: 28px;
+}
+QPushButton#preset-action-btn:hover { border-color: #4FC3F7; color: #E8E8F0; }
+QPushButton#preset-action-btn:disabled { color: #3D3E5C; border-color: #2A2A3E; }
+QPushButton#preset-delete-btn {
+    background-color: #252636;
+    border: 1px solid #3D3E5C;
+    border-radius: 4px;
+    color: #9090A0;
+    padding: 4px 12px;
+    min-height: 28px;
+}
+QPushButton#preset-delete-btn:hover { border-color: #EF5350; color: #EF5350; }
+QPushButton#preset-delete-btn:disabled { color: #3D3E5C; border-color: #2A2A3E; }
 """
 
 

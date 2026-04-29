@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -26,6 +27,7 @@ from voice_changer.effects.pitch import PitchShifter
 from voice_changer.effects.robot import RobotEffect
 from voice_changer.setup.blackhole import get_device_index, is_installed
 
+from .preset_manager import PresetManager
 from .waveform_window import WaveformWindow
 from .widgets.effect_row import EffectRow, ParamSpec
 from .widgets.toggle_switch import ToggleSwitch
@@ -56,6 +58,7 @@ class MainWindow(QMainWindow):
         self._capture: AudioCapture | None = None
         self._waveform_window: WaveformWindow | None = None
         self._output_gain: float = 1.0
+        self._preset_manager = PresetManager()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -65,6 +68,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self._build_device_section())
         layout.addWidget(self._build_preset_section())
+        layout.addWidget(self._build_custom_preset_section())
         layout.addWidget(self._build_effects_section())
         layout.addWidget(self._build_volume_section())
         layout.addWidget(self._build_status_section())
@@ -138,7 +142,11 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
 
         self._preset_btns: dict[str, QPushButton] = {}
-        for key, label in [("m2f", "男 → 女"), ("f2m", "女 → 男"), ("robot", "ロボット"), ("echo", "エコー")]:
+        _presets = [
+            ("m2f", "男 → 女"), ("f2m", "女 → 男"), ("gal", "ギャル声"),
+            ("robot", "ロボット"), ("echo", "エコー"),
+        ]
+        for key, label in _presets:
             btn = QPushButton(label)
             btn.setCheckable(True)
             btn.setObjectName("preset-btn")
@@ -148,6 +156,180 @@ class MainWindow(QMainWindow):
             layout.addWidget(btn)
 
         return box
+
+    # --- カスタムプリセットセクション ---
+
+    def _build_custom_preset_section(self) -> QGroupBox:
+        box = QGroupBox("カスタムプリセット")
+        layout = QVBoxLayout(box)
+        layout.setSpacing(8)
+
+        # Row 1: 選択・適用・削除
+        row1 = QHBoxLayout()
+        self._custom_preset_combo = QComboBox()
+        self._custom_preset_combo.setPlaceholderText("プリセットを選択")
+        self._custom_preset_combo.currentIndexChanged.connect(self._on_preset_selection_changed)
+        row1.addWidget(self._custom_preset_combo, 1)
+
+        self._preset_apply_btn = QPushButton("適用")
+        self._preset_apply_btn.setObjectName("preset-action-btn")
+        self._preset_apply_btn.setEnabled(False)
+        self._preset_apply_btn.clicked.connect(self._on_preset_apply)
+        row1.addWidget(self._preset_apply_btn)
+
+        self._preset_delete_btn = QPushButton("削除")
+        self._preset_delete_btn.setObjectName("preset-delete-btn")
+        self._preset_delete_btn.setEnabled(False)
+        self._preset_delete_btn.clicked.connect(self._on_preset_delete)
+        row1.addWidget(self._preset_delete_btn)
+        layout.addLayout(row1)
+
+        # Row 2: 名前入力・新規保存・上書き保存
+        row2 = QHBoxLayout()
+        name_lbl = QLabel("名前:")
+        name_lbl.setFixedWidth(36)
+        row2.addWidget(name_lbl)
+
+        self._preset_name_edit = QLineEdit()
+        self._preset_name_edit.setPlaceholderText("プリセット名を入力")
+        self._preset_name_edit.textChanged.connect(self._on_preset_name_changed)
+        row2.addWidget(self._preset_name_edit, 1)
+
+        self._preset_save_btn = QPushButton("新規保存")
+        self._preset_save_btn.setObjectName("preset-action-btn")
+        self._preset_save_btn.setEnabled(False)
+        self._preset_save_btn.clicked.connect(self._on_preset_save)
+        row2.addWidget(self._preset_save_btn)
+
+        self._preset_update_btn = QPushButton("上書き保存")
+        self._preset_update_btn.setObjectName("preset-action-btn")
+        self._preset_update_btn.setEnabled(False)
+        self._preset_update_btn.clicked.connect(self._on_preset_update)
+        row2.addWidget(self._preset_update_btn)
+        layout.addLayout(row2)
+
+        self._refresh_preset_combo()
+        return box
+
+    def _capture_state(self) -> dict:
+        return {
+            "pitch": {"enabled": self._pitch.enabled, "semitones": self._pitch.semitones},
+            "formant": {"enabled": self._formant.enabled, "ratio": self._formant.ratio},
+            "robot": {"enabled": self._robot.enabled, "carrier_freq": self._robot.carrier_freq},
+            "echo": {"enabled": self._echo.enabled, "delay_ms": self._echo.delay_ms, "decay": self._echo.decay},
+            "output_gain": self._output_gain,
+        }
+
+    def _apply_state(self, data: dict) -> None:
+        if "pitch" in data:
+            p = data["pitch"]
+            self._pitch.enabled = p.get("enabled", False)
+            self._pitch.semitones = p.get("semitones", 0.0)
+            self._pitch_row.set_enabled(self._pitch.enabled)
+            self._pitch_row.set_value("semitones", self._pitch.semitones)
+
+        if "formant" in data:
+            f = data["formant"]
+            self._formant.enabled = f.get("enabled", False)
+            self._formant.ratio = f.get("ratio", 1.0)
+            self._formant_row.set_enabled(self._formant.enabled)
+            self._formant_row.set_value("ratio", self._formant.ratio)
+
+        if "robot" in data:
+            r = data["robot"]
+            self._robot.enabled = r.get("enabled", False)
+            self._robot.carrier_freq = r.get("carrier_freq", 50.0)
+            self._robot_row.set_enabled(self._robot.enabled)
+            self._robot_row.set_value("carrier_freq", self._robot.carrier_freq)
+
+        if "echo" in data:
+            e = data["echo"]
+            self._echo.enabled = e.get("enabled", False)
+            self._echo.delay_ms = e.get("delay_ms", 300.0)
+            self._echo.decay = e.get("decay", 0.4)
+            self._echo_row.set_enabled(self._echo.enabled)
+            self._echo_row.set_value("delay_ms", self._echo.delay_ms)
+            self._echo_row.set_value("decay", self._echo.decay)
+
+        if "output_gain" in data:
+            self._output_gain = data["output_gain"]
+            int_val = round(self._output_gain / 0.05)
+            self._volume_slider.blockSignals(True)
+            self._volume_slider.setValue(int_val)
+            self._volume_slider.blockSignals(False)
+            self._volume_lbl.setText(f"{int_val * 5}%")
+
+    def _refresh_preset_combo(self, select_name: str | None = None) -> None:
+        self._custom_preset_combo.blockSignals(True)
+        self._custom_preset_combo.clear()
+        for name in self._preset_manager.names():
+            self._custom_preset_combo.addItem(name)
+        self._custom_preset_combo.blockSignals(False)
+
+        if select_name is not None:
+            idx = self._custom_preset_combo.findText(select_name)
+            self._custom_preset_combo.setCurrentIndex(idx)
+        else:
+            self._custom_preset_combo.setCurrentIndex(-1)
+
+        has_selection = self._custom_preset_combo.currentIndex() >= 0
+        self._preset_apply_btn.setEnabled(has_selection)
+        self._preset_delete_btn.setEnabled(has_selection)
+        self._update_preset_save_btn_state()
+
+    def _update_preset_save_btn_state(self) -> None:
+        name = self._preset_name_edit.text().strip()
+        self._preset_save_btn.setEnabled(bool(name))
+        selected = self._custom_preset_combo.currentIndex() >= 0
+        self._preset_update_btn.setEnabled(bool(name) and selected and self._custom_preset_combo.currentText() == name)
+
+    def _on_preset_selection_changed(self, index: int) -> None:
+        has = index >= 0
+        self._preset_apply_btn.setEnabled(has)
+        self._preset_delete_btn.setEnabled(has)
+        if has:
+            self._preset_name_edit.setText(self._custom_preset_combo.currentText())
+        self._update_preset_save_btn_state()
+
+    def _on_preset_name_changed(self, _text: str) -> None:
+        self._update_preset_save_btn_state()
+
+    def _on_preset_apply(self) -> None:
+        name = self._custom_preset_combo.currentText()
+        data = self._preset_manager.get(name)
+        if data:
+            self._apply_state(data)
+
+    def _on_preset_save(self) -> None:
+        name = self._preset_name_edit.text().strip()
+        if not name:
+            return
+        if self._preset_manager.get(name) is not None:
+            if QMessageBox.question(
+                self, "上書き確認", f'"{name}" は既に存在します。上書きしますか？'
+            ) != QMessageBox.Yes:
+                return
+        self._preset_manager.save(name, self._capture_state())
+        self._refresh_preset_combo(select_name=name)
+
+    def _on_preset_update(self) -> None:
+        name = self._custom_preset_combo.currentText()
+        if not name:
+            return
+        self._preset_manager.save(name, self._capture_state())
+        self._refresh_preset_combo(select_name=name)
+
+    def _on_preset_delete(self) -> None:
+        name = self._custom_preset_combo.currentText()
+        if not name:
+            return
+        if QMessageBox.question(
+            self, "削除確認", f'"{name}" を削除しますか？'
+        ) != QMessageBox.Yes:
+            return
+        self._preset_manager.delete(name)
+        self._preset_name_edit.clear()
+        self._refresh_preset_combo()
 
     # --- エフェクトセクション ---
 
@@ -326,15 +508,13 @@ class MainWindow(QMainWindow):
             self._monitor_toggle.set_checked_instant(False)
 
     def _apply_preset(self, name: str, checked: bool) -> None:
-        # m2f と f2m は排他
-        if name == "m2f" and checked:
-            self._preset_btns["f2m"].blockSignals(True)
-            self._preset_btns["f2m"].setChecked(False)
-            self._preset_btns["f2m"].blockSignals(False)
-        elif name == "f2m" and checked:
-            self._preset_btns["m2f"].blockSignals(True)
-            self._preset_btns["m2f"].setChecked(False)
-            self._preset_btns["m2f"].blockSignals(False)
+        # m2f / f2m / gal はピッチ+フォルマントを同時に操作するため排他
+        if name in ("m2f", "f2m", "gal") and checked:
+            for other in ("m2f", "f2m", "gal"):
+                if other != name:
+                    self._preset_btns[other].blockSignals(True)
+                    self._preset_btns[other].setChecked(False)
+                    self._preset_btns[other].blockSignals(False)
 
         if name == "m2f":
             self._pitch.enabled = checked
@@ -357,6 +537,17 @@ class MainWindow(QMainWindow):
                 self._formant.ratio = 0.75
                 self._pitch_row.set_value("semitones", -5.0)
                 self._formant_row.set_value("ratio", 0.75)
+
+        elif name == "gal":
+            self._pitch.enabled = checked
+            self._formant.enabled = checked
+            self._pitch_row.set_enabled(checked)
+            self._formant_row.set_enabled(checked)
+            if checked:
+                self._pitch.semitones = 12.0
+                self._formant.ratio = 1.2
+                self._pitch_row.set_value("semitones", 12.0)
+                self._formant_row.set_value("ratio", 1.2)
 
         elif name == "robot":
             self._robot.enabled = checked
