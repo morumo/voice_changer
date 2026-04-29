@@ -10,12 +10,14 @@
 | 音声 I/O | sounddevice (PortAudio) | 低レイテンシ・クロスプラットフォーム |
 | 数値演算 | numpy | 音声バッファ操作・FFT の基盤 |
 | GUI | PySide6 (Qt for Python) | 純 Python・LGPL ライセンス・Mac/Win 対応 |
+| 波形描画 | pyqtgraph | Qt ネイティブ・リアルタイム描画に特化 |
 | CLI UI | rich | ターミナル UI（`--cli` フラグ時に使用） |
 | 設定ファイル | YAML (PyYAML) | 人間・AI ともに読みやすい |
 | 仮想オーディオ | BlackHole 2ch | MIT ライセンス・Mac 標準的な選択 |
 
-> **注意:** pyrubberband / pyworld は Phase 3（ML ベース変換）向けに依存関係として保持しているが、
-> 現在の Phase 1 エフェクトでは使用していない。ピッチ・フォルマント処理は numpy のみで実装。
+> **注意:** pyrubberband / pyworld の pyrubberband は Phase 3（ML ベース変換）向けに依存関係として保持しているが、
+> 現在の Phase 1/2 エフェクトでは使用していない。ピッチ処理は numpy の位相ボコーダで実装。
+> pyworld は FormantShifter の CheapTrick スペクトル包絡推定で使用中。
 
 ---
 
@@ -48,7 +50,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     IN[入力バッファ\nfloat32 × 256] --> PS[PitchShifter\n位相ボコーダ OLA]
-    PS --> FS[FormantShifter\nFFT スペクトル補間 OLA]
+    PS --> FS[FormantShifter\nWORLD CheapTrick + OLA]
     FS --> RB[RobotEffect\nリングモジュレーション]
     RB --> EC[EchoEffect\n循環ディレイバッファ]
     EC --> OUT[出力バッファ\nfloat32 × 256]
@@ -56,17 +58,22 @@ flowchart LR
 
 | エフェクト | 手法 | パラメータ |
 |-----------|------|-----------|
-| PitchShifter | 位相ボコーダ（OLA）| `semitones`: -12〜+12 |
-| FormantShifter | WORLD CheapTrick 包絡推定 + OLA | `ratio`: 0.5〜2.0 |
-| RobotEffect | リングモジュレーション | `carrier_freq` (Hz) |
-| EchoEffect | 循環ディレイバッファ | `delay_ms`, `decay` |
+| PitchShifter | 位相ボコーダ（OLA）| `semitones`: -12〜+12（0.1 刻み） |
+| FormantShifter | WORLD CheapTrick 包絡推定 + OLA | `ratio`: 0.5〜2.0（0.01 刻み） |
+| RobotEffect | リングモジュレーション | `carrier_freq` (Hz): 20〜500 |
+| EchoEffect | 循環ディレイバッファ | `delay_ms`: 50〜1000、`decay`: 0〜0.9 |
 
-### プリセット（`config/default.yaml` に定義）
+### 組み込みプリセット
 
-| プリセット | PitchShifter | FormantShifter |
-|-----------|-------------|----------------|
-| 男声 → 女声 (`m2f`) | +5 semitones | ratio: 1.3 |
-| 女声 → 男声 (`f2m`) | -5 semitones | ratio: 0.75 |
+| プリセット | PitchShifter | FormantShifter | 備考 |
+|-----------|-------------|----------------|------|
+| 男声 → 女声 (`m2f`) | +5 semitones | ratio: 1.3 | |
+| 女声 → 男声 (`f2m`) | -5 semitones | ratio: 0.75 | |
+| ギャル声 (`gal`) | +12 semitones | ratio: 1.2 | 1 オクターブ上 + 声道長短縮 |
+| ロボット (`robot`) | — | — | carrier_freq: 50 Hz |
+| エコー (`echo`) | — | — | delay_ms: 300、decay: 0.4 |
+
+m2f / f2m / gal は相互排他（同時に 1 つだけ有効）。robot / echo は独立して ON/OFF 可能。
 
 ---
 
@@ -134,10 +141,82 @@ speed = 12             # dio の高速モード（精度を少し下げて高速
 
 ---
 
-## モニタリング機能
+## GUI 設計
+
+### 画面構成
+
+```
+MainWindow (QMainWindow)
+├── デバイス設定 (QGroupBox)
+│   ├── 入力デバイス選択 (QComboBox)
+│   ├── 出力デバイス選択 (QComboBox)
+│   ├── モニターデバイス選択 (QComboBox)
+│   └── 開始 / 停止ボタン
+├── プリセット (QGroupBox)
+│   └── 男→女 / 女→男 / ギャル声 / ロボット / エコー (QPushButton × 5, checkable)
+├── カスタムプリセット (QGroupBox)
+│   ├── プリセット選択 (QComboBox) + 適用 / 削除ボタン
+│   └── 名前入力 (QLineEdit) + 新規保存 / 上書き保存ボタン
+├── エフェクト (QGroupBox)
+│   ├── ピッチ行 (EffectRow)
+│   ├── フォルマント行 (EffectRow)
+│   ├── ロボット行 (EffectRow)
+│   └── エコー行 (EffectRow)
+├── 出力設定 (QGroupBox)
+│   └── 出力音量スライダー (0〜200%, 5% 刻み)
+└── ステータスバー行
+    ├── 状態ラベル (停止中 / 変換中)
+    ├── 波形表示ボタン → WaveformWindow（別ウィンドウ）
+    └── モニタリングトグル (ToggleSwitch)
+```
+
+### カスタムウィジェット
+
+| ウィジェット | ファイル | 説明 |
+|-------------|---------|------|
+| `ToggleSwitch` | `widgets/toggle_switch.py` | アニメーション付きトグルスイッチ（QAbstractButton ベース、QPropertyAnimation） |
+| `EffectRow` | `widgets/effect_row.py` | エフェクト名ラベル + ToggleSwitch + QSlider × N のレイアウト行。`ParamSpec` dataclass でパラメータ定義 |
+
+### カスタムプリセット管理
+
+```mermaid
+flowchart LR
+    UI[カスタムプリセット UI] --> PM[PresetManager]
+    PM -->|JSON 読み書き| FILE["~/.voice_changer/presets.json"]
+```
+
+保存データ構造:
+
+```json
+{
+  "プリセット名": {
+    "pitch":   { "enabled": true,  "semitones": 5.0 },
+    "formant": { "enabled": true,  "ratio": 1.3 },
+    "robot":   { "enabled": false, "carrier_freq": 50.0 },
+    "echo":    { "enabled": false, "delay_ms": 300.0, "decay": 0.4 },
+    "output_gain": 1.0
+  }
+}
+```
+
+### 波形モニター
 
 変換後の音声をスピーカー等でリアルタイム確認する機能。
 音声コールバック（リアルタイムスレッド）をブロックしないよう、キューを介した非同期設計にしている。
+
+```
+音声コールバック (RT スレッド)
+  ↓ queue.put_nowait()  ← 満杯なら無音でドロップ（キュー上限 16）
+  queue.Queue(maxsize=16)
+  ↓ QTimer (33ms) が Qt メインスレッドで取り出し
+  pyqtgraph PlotWidget（入力: 青 #4FC3F7 / 出力: 緑 #4CAF50）
+```
+
+- 表示サンプル数: 4096 samples（約 93ms @ 44100Hz）
+- 更新レート: 約 30fps（33ms 間隔）
+- 「波形表示」ボタン押下時に別ウィンドウとして表示、閉じれば停止
+
+### モニタリング機能
 
 ```
 音声コールバック
@@ -159,18 +238,21 @@ voice_changer/
 ├── src/
 │   └── voice_changer/
 │       ├── main.py              # エントリポイント（デフォルト: GUI / --cli: CLI）
+│       ├── __main__.py          # python -m voice_changer サポート
 │       ├── audio/
 │       │   ├── capture.py       # マイク入力・BlackHole 出力・モニタリング
 │       │   └── pipeline.py      # エフェクト直列実行
 │       ├── effects/
 │       │   ├── base.py          # BaseEffect 抽象クラス（enabled フラグ管理）
 │       │   ├── pitch.py         # 位相ボコーダ OLA
-│       │   ├── formant.py       # FFT スペクトル補間 + A特性補正
+│       │   ├── formant.py       # WORLD CheapTrick スペクトル包絡 + OLA
 │       │   ├── robot.py         # リングモジュレーション
 │       │   └── echo.py          # 循環ディレイバッファ
 │       ├── gui/
-│       │   ├── app.py           # QApplication エントリポイント・スタイルシート
+│       │   ├── app.py           # QApplication エントリポイント・ダークテーマ stylesheet
 │       │   ├── main_window.py   # QMainWindow（デバイス選択・プリセット・エフェクト制御）
+│       │   ├── preset_manager.py # カスタムプリセット保存・読み込み・削除
+│       │   ├── waveform_window.py # リアルタイム波形表示（pyqtgraph）
 │       │   └── widgets/
 │       │       ├── toggle_switch.py  # アニメーション付きトグルスイッチ
 │       │       └── effect_row.py     # エフェクト行（トグル + スライダー）
@@ -186,6 +268,7 @@ voice_changer/
 ├── tests/
 │   └── test_effects.py
 ├── pyproject.toml
+├── README.md
 └── CLAUDE.md
 ```
 
@@ -218,19 +301,16 @@ Discord / Zoom
 flowchart TD
     START[アプリ起動] --> CHECK{BlackHole\n検出}
     CHECK -->|あり| RUN[通常起動]
-    CHECK -->|なし| PROMPT[インストール案内\nを表示]
-    PROMPT --> DL[インストーラを\n自動ダウンロード]
-    DL --> EXEC[pkg インストーラを\n実行（sudo）]
-    EXEC --> RESTART[Core Audio 再起動\n案内]
-    RESTART --> RUN
+    CHECK -->|なし| PROMPT[ダイアログで\nインストール案内]
+    PROMPT --> RUN
 ```
 
 ---
 
 ## 開発フェーズ
 
-| Phase | 内容 |
-|-------|------|
-| **Phase 1（現在）** | DSP ベースエフェクト（OLA 位相ボコーダ / スペクトル補間）・CLI UI・BlackHole セットアップフロー |
-| **Phase 2** | デスクトップ GUI（Tauri または PyQt）・Windows 対応 |
-| **Phase 3** | ML ベース変換（RVC / WORLD Vocoder）の追加 |
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| **Phase 1** | DSP ベースエフェクト（OLA 位相ボコーダ / WORLD CheapTrick）・CLI UI・BlackHole セットアップフロー | ✅ 完了 |
+| **Phase 2** | デスクトップ GUI（PySide6）・カスタムプリセット管理・波形モニター・ギャル声プリセット | ✅ 完了 |
+| **Phase 3** | ML ベース変換（RVC / WORLD Vocoder）・Windows 対応 | 未着手 |
