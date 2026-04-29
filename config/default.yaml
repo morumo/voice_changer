@@ -1,0 +1,36 @@
+audio:
+  sample_rate: 44100
+  block_size: 256       # samples per block (~5.8ms)
+  channels: 1
+  dtype: float32
+
+output:
+  virtual_device_name: "BlackHole 2ch"
+  monitor: false        # スピーカーモニタリング
+
+effects:
+  pitch:
+    enabled: false
+    semitones: 0.0
+  formant:
+    enabled: false
+    ratio: 1.0
+  robot:
+    enabled: false
+    carrier_freq: 50.0
+  echo:
+    enabled: false
+    delay_ms: 300
+    decay: 0.4
+
+presets:
+  male_to_female:
+    pitch: { enabled: true, semitones: 5.0 }
+    formant: { enabled: true, ratio: 1.3 }
+  female_to_male:
+    pitch: { enabled: true, semitones: -5.0 }
+    formant: { enabled: true, ratio: 0.75 }
+  robot:
+    robot: { enabled: true, carrier_freq: 50.0 }
+  echo:
+    echo: { enabled: true, delay_ms: 300, decay: 0.4 }
