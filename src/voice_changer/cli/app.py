@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
 
-from voice_changer.setup import blackhole
+from voice_changer.setup import blackhole as _va
 
 console = Console()
 
@@ -35,29 +35,35 @@ def select_device(prompt_text: str, kind: str) -> int:
 
 
 def setup_flow() -> None:
-    """BlackHole が未検出の場合にセットアップを促す。"""
-    if blackhole.is_installed():
+    """仮想オーディオデバイスが未検出の場合にセットアップを促す。"""
+    if _va.is_installed():
         return
 
+    dev = _va.display_name()
+    url = _va.install_url()
+
     console.print(Panel(
-        "[yellow]BlackHole 2ch が検出されませんでした。[/yellow]\n"
-        "Discord / Zoom 等で仮想マイクとして使うには BlackHole が必要です。",
+        f"[yellow]{dev} が検出されませんでした。[/yellow]\n"
+        "Discord / Zoom 等で仮想マイクとして使うにはインストールが必要です。",
         title="セットアップ"
     ))
 
-    if not Confirm.ask("今すぐインストールしますか？"):
-        msg = "[red]BlackHole なしでは仮想マイク出力ができません。パススルーモードで起動します。[/red]"
-        console.print(msg)
-        return
-
-    success = blackhole.install(console)
-    if success:
-        console.print("[green]インストール完了！アプリを再起動してください。[/green]")
-        sys.exit(0)
+    if sys.platform == "darwin":
+        if not Confirm.ask("今すぐインストールしますか？"):
+            console.print(f"[red]{dev} なしでは仮想マイク出力ができません。パススルーモードで起動します。[/red]")
+            return
+        success = _va.install(console)
+        if success:
+            console.print("[green]インストール完了！アプリを再起動してください。[/green]")
+            sys.exit(0)
+        else:
+            console.print(f"[red]インストールに失敗しました。手動で {dev} をインストールしてください。[/red]")
+            console.print(f"  {url}")
     else:
-        msg = "[red]インストールに失敗しました。手動で BlackHole をインストールしてください。[/red]"
-        console.print(msg)
-        console.print("  https://github.com/ExistentialAudio/BlackHole")
+        console.print(f"  ダウンロード: [cyan]{url}[/cyan]")
+        _va.install(console)
+        console.print("[yellow]インストール後、アプリを再起動してください。[/yellow]")
+        console.print(f"[red]{dev} なしでは仮想マイク出力ができません。パススルーモードで起動します。[/red]")
 
 
 def print_status(effects: dict, capture) -> None:

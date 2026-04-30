@@ -8,21 +8,21 @@ Discord / Google Meet / Zoom 等の仮想マイクとして利用できます。
 - **低レイテンシ** — OLA 位相ボコーダ採用、実測 ≈ 47ms
 - **完全ローカル動作** — 外部 API・有料サービス不使用
 - **高品質フォルマント変換** — WORLD CheapTrick による声道包絡推定
-- **ダークテーマ GUI** — PySide6 製デスクトップアプリ（CLI モードも選択可）
+- **ダークテーマ GUI** — PySide6 製デスクトップアプリ（CLI モードも選択可）、macOS / Windows 対応
 - **カスタムプリセット** — 設定に名前を付けて保存・読み込み・削除
 
 ---
 
 ## 必要環境
 
-- macOS 12 Monterey 以降
 - Python 3.11 以降
 - [uv](https://github.com/astral-sh/uv)（パッケージ管理）
-- [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole)（仮想オーディオデバイス）
+- 仮想オーディオデバイス（未インストールの場合、起動時にダイアログで案内されます）
 
-> **BlackHole について**  
-> 未インストールの場合、起動時にダイアログで案内が表示されます。  
-> インストール後は BlackHole 2ch を Discord / Zoom 等のマイクデバイスとして選択してください。
+| OS | 仮想オーディオデバイス |
+|----|----------------------|
+| macOS 12 Monterey 以降 | [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole)（起動時に自動インストール可） |
+| Windows 10 / 11 | [VB-Audio Virtual Cable](https://vb-audio.com/Cable/)（起動時にブラウザで案内） |
 
 ---
 
@@ -56,11 +56,11 @@ uv run voice-changer --cli
 
 ### 1. デバイス設定
 
-| 項目 | 選択先 |
-|------|--------|
-| 入力 | マイクデバイス |
-| 出力 | BlackHole 2ch（Discord 等に出力） |
-| モニター | スピーカー / イヤホン（変換後の声を自分で確認したい場合） |
+| 項目 | macOS | Windows |
+|------|-------|---------|
+| 入力 | マイクデバイス | マイクデバイス |
+| 出力 | BlackHole 2ch | CABLE Input |
+| モニター | スピーカー / イヤホン（任意） | スピーカー / イヤホン（任意） |
 
 設定後、「**開始**」ボタンで変換スタート。
 
@@ -154,8 +154,14 @@ off <effect>
 
 ## Discord / Zoom / Google Meet での使い方
 
-1. アプリを起動し、出力を **BlackHole 2ch** に設定して「開始」
-2. Discord / Zoom 等のマイク設定で **BlackHole 2ch** を選択
+1. アプリを起動し、出力を仮想デバイスに設定して「開始」
+2. Discord / Zoom 等のマイク設定で仮想デバイスを選択
+
+| OS | アプリの出力デバイス | Discord 等のマイク設定 |
+|----|--------------------|-----------------------|
+| macOS | BlackHole 2ch | BlackHole 2ch |
+| Windows | CABLE Input | CABLE Output |
+
 3. アプリ上でエフェクトを操作すると通話相手に変換後の声が届く
 
 > モニタリングをONにする場合は必ずイヤホンを使用してください（ハウリング防止）。
@@ -209,7 +215,7 @@ voice_changer/
 │   │       ├── toggle_switch.py  # アニメーション付きトグルスイッチ
 │   │       └── effect_row.py     # エフェクト行ウィジェット
 │   ├── setup/
-│   │   └── blackhole.py     # BlackHole 検出
+│   │   └── blackhole.py     # 仮想オーディオ検出・セットアップ（Mac: BlackHole / Win: VB-Audio Cable）
 │   └── cli/
 │       └── app.py           # rich ベース CLI UI
 ├── config/
@@ -247,8 +253,8 @@ class MyEffect(BaseEffect):
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | 1 | DSP エフェクト・CLI・BlackHole セットアップ | ✅ 完了 |
-| 2 | デスクトップ GUI・カスタムプリセット・波形モニター | ✅ 完了 |
-| 3 | ML ベース変換（RVC / WORLD Vocoder）・Windows 対応 | 未着手 |
+| 2 | デスクトップ GUI・カスタムプリセット・波形モニター・Windows 対応 | ✅ 完了 |
+| 3 | スタンドアロン配布（PyInstaller）・ML ベース変換（RVC / WORLD Vocoder） | 未着手 |
 
 ---
 

@@ -25,7 +25,9 @@ from voice_changer.effects.echo import EchoEffect
 from voice_changer.effects.formant import FormantShifter
 from voice_changer.effects.pitch import PitchShifter
 from voice_changer.effects.robot import RobotEffect
+from voice_changer.setup.blackhole import display_name as _va_display_name
 from voice_changer.setup.blackhole import get_device_index, is_installed
+from voice_changer.setup.blackhole import install_url as _va_install_url
 
 from .preset_manager import PresetManager
 from .waveform_window import WaveformWindow
@@ -75,12 +77,13 @@ class MainWindow(QMainWindow):
         layout.addStretch()
 
         if not is_installed():
+            dev = _va_display_name()
             QMessageBox.warning(
                 self,
-                "BlackHole 未インストール",
-                "BlackHole 2ch が見つかりません。\n"
+                f"{dev} 未インストール",
+                f"{dev} が見つかりません。\n"
                 "Discord / Zoom 等で仮想マイクとして使用するにはインストールが必要です。\n\n"
-                "https://github.com/ExistentialAudio/BlackHole",
+                f"{_va_install_url()}",
             )
 
     # --- デバイスセクション ---

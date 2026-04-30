@@ -13,7 +13,8 @@
 | 波形描画 | pyqtgraph | Qt ネイティブ・リアルタイム描画に特化 |
 | CLI UI | rich | ターミナル UI（`--cli` フラグ時に使用） |
 | 設定ファイル | YAML (PyYAML) | 人間・AI ともに読みやすい |
-| 仮想オーディオ | BlackHole 2ch | MIT ライセンス・Mac 標準的な選択 |
+| 仮想オーディオ (Mac) | BlackHole 2ch | MIT ライセンス・Mac 標準的な選択 |
+| 仮想オーディオ (Win) | VB-Audio Virtual Cable | 無料・Windows で広く使われる定番 |
 
 > **注意:** pyrubberband / pyworld の pyrubberband は Phase 3（ML ベース変換）向けに依存関係として保持しているが、
 > 現在の Phase 1/2 エフェクトでは使用していない。ピッチ処理は numpy の位相ボコーダで実装。
@@ -35,7 +36,7 @@ flowchart LR
         RB --> EC[EchoEffect]
     end
 
-    PIPELINE -->|変換済み PCM| BH[BlackHole\n仮想デバイス]
+    PIPELINE -->|変換済み PCM| BH[仮想デバイス\nBlackHole / CABLE Input]
     PIPELINE -->|任意| MON[モニタリング\nキュー]
     MON --> SPK[スピーカー]
     BH --> APPS[Discord / Zoom\nGoogle Meet]
@@ -257,7 +258,7 @@ voice_changer/
 │       │       ├── toggle_switch.py  # アニメーション付きトグルスイッチ
 │       │       └── effect_row.py     # エフェクト行（トグル + スライダー）
 │       ├── setup/
-│       │   └── blackhole.py     # BlackHole 検出・インストール支援
+│       │   └── blackhole.py     # 仮想オーディオデバイス検出・セットアップ（Mac: BlackHole / Win: VB-Audio Cable）
 │       └── cli/
 │           └── app.py           # rich による CLI UI（--cli フラグ時に使用）
 ├── config/
@@ -283,7 +284,7 @@ AudioCapture コールバック
   ↓  [≈ 40.6ms] OLA ウォームアップ (FRAME - HOP = 1792 samples)
 EffectPipeline（PitchShifter + FormantShifter + RobotEffect + EchoEffect）
   ↓  [≈ 0.5ms]  出力バッファ書き込み
-BlackHole 出力
+仮想デバイス出力（BlackHole / CABLE Input）
   ↓
 Discord / Zoom
 
@@ -295,15 +296,29 @@ Discord / Zoom
 
 ---
 
-## BlackHole セットアップフロー
+## 仮想オーディオセットアップフロー
+
+`setup/blackhole.py` が OS を判定し、プラットフォーム別の案内を行う。
 
 ```mermaid
 flowchart TD
-    START[アプリ起動] --> CHECK{BlackHole\n検出}
-    CHECK -->|あり| RUN[通常起動]
-    CHECK -->|なし| PROMPT[ダイアログで\nインストール案内]
-    PROMPT --> RUN
+    START[アプリ起動] --> OS{OS 判定}
+    OS -->|macOS| CMAC{BlackHole\n検出}
+    OS -->|Windows| CWIN{CABLE Input\n検出}
+
+    CMAC -->|あり| RUN[通常起動]
+    CMAC -->|なし| PMAC[ダイアログ表示\npkg 自動インストール提案]
+    PMAC --> RUN
+
+    CWIN -->|あり| RUN
+    CWIN -->|なし| PWIN[ダイアログ表示\nブラウザでDLページを開く]
+    PWIN --> RUN
 ```
+
+| OS | 検出対象 | 未インストール時の対応 |
+|----|---------|----------------------|
+| macOS | `BlackHole 2ch` | pkg 自動ダウンロード・実行（sudo） |
+| Windows | `CABLE Input` | ブラウザで vb-audio.com/Cable を開く |
 
 ---
 
@@ -312,5 +327,5 @@ flowchart TD
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | **Phase 1** | DSP ベースエフェクト（OLA 位相ボコーダ / WORLD CheapTrick）・CLI UI・BlackHole セットアップフロー | ✅ 完了 |
-| **Phase 2** | デスクトップ GUI（PySide6）・カスタムプリセット管理・波形モニター・ギャル声プリセット | ✅ 完了 |
-| **Phase 3** | ML ベース変換（RVC / WORLD Vocoder）・Windows 対応 | 未着手 |
+| **Phase 2** | デスクトップ GUI（PySide6）・カスタムプリセット管理・波形モニター・ギャル声プリセット・Windows 対応 | ✅ 完了 |
+| **Phase 3** | スタンドアロン配布（PyInstaller）・ML ベース変換（RVC / WORLD Vocoder） | 未着手 |

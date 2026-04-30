@@ -5,7 +5,7 @@
 - マイク入力音声をリアルタイムで変換し、仮想マイクとして Discord / Google Meet / Zoom 等で利用できる
 - 変換レイテンシを最小化する（目標: < 50ms）
 - 完全ローカル動作（外部 API・有料サービス不使用）
-- Mac 対応（将来的に Windows も対応）
+- macOS / Windows 10/11 対応
 - OSS として GitHub 公開できる構成にする
 
 ## Non-Goals
@@ -34,9 +34,13 @@
 
 ### セットアップ
 
-- 起動時に BlackHole（仮想オーディオドライバ）の有無を自動検出する
-- 未インストール時はダイアログで案内する
-- BlackHole は MIT ライセンスのため同梱・配布可能
+- 起動時に仮想オーディオドライバの有無を自動検出する（OS に応じて対象デバイスを切り替え）
+- 未インストール時はダイアログ / CLI でインストール先 URL を案内する
+
+| OS | 仮想オーディオデバイス | 自動インストール |
+|----|----------------------|----------------|
+| macOS | BlackHole 2ch | ✅（pkg 自動ダウンロード・実行） |
+| Windows | VB-Audio Virtual Cable（CABLE Input） | ❌（ブラウザでダウンロードページを開く） |
 
 ### 操作 UI
 
@@ -62,7 +66,9 @@ CLI は `--cli` フラグで引き続き利用可能。デフォルト起動は 
 ### 入出力
 
 - **入力**: システムに接続されたマイクデバイスを選択可能
-- **出力**: BlackHole 仮想デバイスへ出力（Discord 等はこれをマイクとして認識）
+- **出力**: 仮想オーディオデバイスへ出力（Discord 等はこれをマイクとして認識）
+  - macOS: BlackHole 2ch
+  - Windows: CABLE Input（VB-Audio Virtual Cable）
 - **モニタリング**: 変換後の音声をスピーカーでリアルタイム確認できる（任意）
 
 ### カスタムプリセット
@@ -103,8 +109,9 @@ OLA ウォームアップ (FRAME - HOP = 1792 samples)  ≈ 40.6ms
 
 ## 対応環境
 
-| 項目 | Phase 1 / 2 | Phase 3 |
-|------|------------|---------|
-| OS | macOS 12 Monterey 以降 | macOS + Windows 10/11（予定） |
-| 仮想オーディオ | BlackHole 2ch | BlackHole（Mac）/ VB-Audio Cable（Win）予定 |
+| 項目 | 現在（Phase 1 / 2） | Phase 3 |
+|------|-------------------|---------|
+| OS | macOS 12 Monterey 以降 / Windows 10/11 | 同左 |
+| 仮想オーディオ (Mac) | BlackHole 2ch | 同左 |
+| 仮想オーディオ (Win) | VB-Audio Virtual Cable | 同左 |
 | Python | 3.11 以降 | 同左 |

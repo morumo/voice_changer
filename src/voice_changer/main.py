@@ -12,6 +12,7 @@ from voice_changer.effects.echo import EchoEffect
 from voice_changer.effects.formant import FormantShifter
 from voice_changer.effects.pitch import PitchShifter
 from voice_changer.effects.robot import RobotEffect
+from voice_changer.setup.blackhole import display_name as _va_display_name
 from voice_changer.setup.blackhole import get_device_index
 
 
@@ -34,9 +35,9 @@ def _run_cli() -> None:
     bh_index = get_device_index()
     if bh_index is not None:
         output_device = bh_index
-        console.print(f"[green]出力: BlackHole 2ch (ID={bh_index})[/green]")
+        console.print(f"[green]出力: {_va_display_name()} (ID={bh_index})[/green]")
     else:
-        msg = "[yellow]BlackHole が見つかりません。出力デバイスを手動選択してください。[/yellow]"
+        msg = f"[yellow]{_va_display_name()} が見つかりません。出力デバイスを手動選択してください。[/yellow]"
         console.print(msg)
         output_device = select_device("出力デバイス ID を選択してください", "Output")
 
